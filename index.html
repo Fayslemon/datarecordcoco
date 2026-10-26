@@ -1,21 +1,522 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
-    <!-- cache fix -->
-    <link rel="stylesheet" href="./style.css?v=1">
-    <script src="./main.js?v=1" defer></script>
-
-    <title>Pop Cat</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f6f4a">
+<title>Coconut Test Logger</title>
+<link rel="stylesheet" href="style.css">
+<!-- Excel export library (needs internet once; CSV export works offline) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
-    <div class="wrapper">
-        <h1 id="score">0</h1>
-        <img id="popcat" src="./images/close.png" alt="">
-        <button id="btn">POP</button>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="logo">🥥</div>
+    <div>
+      <h1>Coconut Test Logger</h1>
+      <p>Daily machine testing data entry</p>
     </div>
+  </div>
+</header>
+
+<main class="container">
+
+  <!-- ============ ENTRY FORM ============ -->
+  <section class="card">
+    <h2 id="formTitle">➕ New Test Entry</h2>
+    <form id="entryForm" class="grid" autocomplete="off" novalidate>
+
+      <div class="field">
+        <label for="date">Date</label>
+        <input type="date" id="date" required>
+      </div>
+      <div class="field wide">
+        <label for="worker">Tested by <span class="opt">(optional)</span></label>
+        <input type="text" id="worker" placeholder="Worker name">
+      </div>
+      <div class="field"></div>
+
+      <div class="section-label">Whole coconut breakdown <span style="text-transform:none">(grams)</span></div>
+
+      <div class="field">
+        <label for="coconut">Whole coconut <span class="unit">(g)</span></label>
+        <input type="number" id="coconut" inputmode="decimal" step="any" min="0" required>
+      </div>
+      <div class="field">
+        <label for="water">Water <span class="unit">(g)</span></label>
+        <input type="number" id="water" inputmode="decimal" step="any" min="0" required>
+      </div>
+      <div class="field">
+        <label for="shell">Shell &amp; husk <span class="unit">(g)</span></label>
+        <input type="number" id="shell" inputmode="decimal" step="any" min="0" required>
+      </div>
+      <div class="field">
+        <label for="black">Black kernel <span class="unit">(g)</span></label>
+        <input type="number" id="black" inputmode="decimal" step="any" min="0" required>
+      </div>
+
+      <div class="section-label">Kernel breakdown <span style="text-transform:none">(grams)</span></div>
+
+      <div class="field">
+        <label for="testa">Testa <span class="unit">(g)</span></label>
+        <input type="number" id="testa" inputmode="decimal" step="any" min="0" required>
+      </div>
+      <div class="field">
+        <label for="diced">Diced (after cut) <span class="unit">(g)</span></label>
+        <input type="number" id="diced" inputmode="decimal" step="any" min="0" required>
+      </div>
+      <div class="field">
+        <label for="tombong">Tombong <span class="unit">(g)</span></label>
+        <input type="number" id="tombong" inputmode="decimal" step="any" min="0" required>
+      </div>
+      <div class="field">
+        <label for="white">White kernel <span class="unit">(g)</span></label>
+        <input type="number" id="white" inputmode="decimal" step="any" min="0" required>
+      </div>
+
+      <div class="field full">
+        <label for="remarks">Remarks <span class="opt">(optional)</span></label>
+        <textarea id="remarks" placeholder="Machine, batch, anything unusual…"></textarea>
+      </div>
+
+      <!-- Live percentages -->
+      <div class="preview" id="preview">
+        <div class="pv" id="pvTesta"><span>Testa %</span><strong>–</strong></div>
+        <div class="pv" id="pvDiced"><span>Diced %</span><strong>–</strong></div>
+        <div class="pv" id="pvTombong"><span>Tombong %</span><strong>–</strong></div>
+        <div class="pv" id="pvWhite"><span>White kernel %</span><strong>–</strong></div>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="btn btn-primary big" id="saveBtn">💾 Save Entry</button>
+        <button type="button" class="btn btn-ghost" id="cancelEdit" hidden>Cancel edit</button>
+        <button type="button" class="btn btn-ghost" id="clearForm">Clear</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- ============ RECORDS ============ -->
+  <section class="card">
+    <h2>📋 Records <small id="countLabel"></small></h2>
+
+    <div class="toolbar">
+      <div class="field">
+        <label for="fromDate">From</label>
+        <input type="date" id="fromDate">
+      </div>
+      <div class="field">
+        <label for="toDate">To</label>
+        <input type="date" id="toDate">
+      </div>
+      <button class="btn btn-ghost" id="resetFilter" type="button">Reset</button>
+      <div class="spacer"></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="exportXlsx" type="button">⬇ Export Excel</button>
+        <button class="btn btn-ghost" id="copyBtn" type="button">📄 Copy for Excel</button>
+        <button class="btn btn-ghost" id="exportCsv" type="button">CSV</button>
+      </div>
+    </div>
+
+    <div class="summary" id="summary"></div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>No</th>
+            <th class="left">Date</th>
+            <th>Whole coconut</th>
+            <th>Water</th>
+            <th>Shell &amp; husk</th>
+            <th>Black kernel</th>
+            <th>Testa</th>
+            <th>Diced (after cut)</th>
+            <th>Tombong</th>
+            <th>White kernel</th>
+            <th class="pct">Testa %</th>
+            <th class="pct">Diced %</th>
+            <th class="pct">Tombong %</th>
+            <th class="pct">White kernel %</th>
+            <th class="left">Tested by</th>
+            <th class="left">Remarks</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div class="empty" id="empty" hidden>
+        <div class="big">🥥</div>
+        <div>No records yet. Add your first test entry above.</div>
+      </div>
+    </div>
+    <p class="hint">Tip: “Copy for Excel” copies the table — open Excel and just press Ctrl+V. Swipe the table sideways on phones.</p>
+  </section>
+
+  <!-- ============ SETTINGS / BACKUP ============ -->
+  <section class="card">
+    <details>
+      <summary>⚙️ Settings &amp; Backup</summary>
+      <div class="settings-grid">
+        <div class="field">
+          <label for="threshold">Highlight Diced % red when ≥</label>
+          <input type="number" id="threshold" inputmode="decimal" min="0" step="0.5" value="5">
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-ghost" id="backupBtn" type="button">Save backup file</button>
+          <button class="btn btn-ghost" id="restoreBtn" type="button">Restore backup</button>
+          <button class="btn btn-danger" id="wipeBtn" type="button">Delete all data</button>
+          <input type="file" id="restoreFile" accept=".json" hidden>
+        </div>
+      </div>
+      <p class="hint">⚠️ Data is stored in <strong>this browser on this device</strong>. Entries typed on one phone do not appear on another device. Use “Save backup file” regularly, or export to Excel.</p>
+    </details>
+  </section>
+
+</main>
+
+<footer>Coconut Test Logger · Percentages are calculated against Black kernel weight</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  const KEY = 'coconutTestData_v1';
+  const SETTINGS_KEY = 'coconutTestSettings_v1';
+  const NUM = ['coconut', 'water', 'shell', 'black', 'testa', 'diced', 'tombong', 'white'];
+  const $ = id => document.getElementById(id);
+
+  let records = load(KEY, []);
+  let settings = Object.assign({ threshold: 5 }, load(SETTINGS_KEY, {}));
+  let editingId = null;
+
+  /* ---------- storage ---------- */
+  function load(k, fallback) {
+    try { const v = JSON.parse(localStorage.getItem(k)); return v ?? fallback; }
+    catch (e) { return fallback; }
+  }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(records)); }
+    catch (e) { toast('Could not save – browser storage is full or blocked', true); }
+  }
+  function saveSettings() {
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) {}
+  }
+
+  /* ---------- helpers ---------- */
+  function today() {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 10);
+  }
+  function pct(x, base) { return base > 0 ? (x / base) * 100 : null; }
+  function calc(r) {
+    return {
+      testa: pct(r.testa, r.black),
+      diced: pct(r.diced, r.black),
+      tombong: pct(r.tombong, r.black),
+      white: pct(r.white, r.black)
+    };
+  }
+  function fmtPct(v) { return v === null ? '–' : Math.round(v) + '%'; }
+  function isAlert(v) { return v !== null && Math.round(v) >= settings.threshold; }
+  function fmtDate(s) {
+    if (!s) return '';
+    const [y, m, d] = s.split('-');
+    const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m - 1];
+    return `${+d}-${mon}`;
+  }
+  function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  let toastTimer;
+  function toast(msg, isErr) {
+    const t = $('toast');
+    t.textContent = msg;
+    t.className = 'toast show' + (isErr ? ' err' : '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.className = 'toast', 2600);
+  }
+
+  function sorted() {
+    return records.slice().sort((a, b) => a.date === b.date ? a.id - b.id : (a.date < b.date ? -1 : 1));
+  }
+  function filtered() {
+    const f = $('fromDate').value, t = $('toDate').value;
+    return sorted().filter(r => (!f || r.date >= f) && (!t || r.date <= t));
+  }
+
+  /* ---------- form ---------- */
+  function readForm() {
+    const r = { date: $('date').value, worker: $('worker').value.trim(), remarks: $('remarks').value.trim() };
+    NUM.forEach(k => r[k] = $(k).value === '' ? NaN : parseFloat($(k).value));
+    return r;
+  }
+  function validate(r) {
+    let ok = true;
+    $('date').classList.toggle('invalid', !r.date);
+    if (!r.date) ok = false;
+    NUM.forEach(k => {
+      const bad = isNaN(r[k]) || r[k] < 0;
+      $(k).classList.toggle('invalid', bad);
+      if (bad) ok = false;
+    });
+    return ok;
+  }
+  function resetForm(keepDate) {
+    const d = keepDate ? $('date').value : today();
+    $('entryForm').reset();
+    $('date').value = d || today();
+    document.querySelectorAll('.invalid').forEach(e => e.classList.remove('invalid'));
+    editingId = null;
+    $('formTitle').textContent = '➕ New Test Entry';
+    $('saveBtn').textContent = '💾 Save Entry';
+    $('cancelEdit').hidden = true;
+    updatePreview();
+  }
+  function updatePreview() {
+    const r = readForm();
+    const c = calc(r);
+    const map = { testa: 'pvTesta', diced: 'pvDiced', tombong: 'pvTombong', white: 'pvWhite' };
+    for (const k in map) {
+      const el = $(map[k]);
+      el.querySelector('strong').textContent = isNaN(c[k]) || c[k] === null ? '–' : fmtPct(c[k]);
+      el.classList.toggle('alert', k === 'diced' && c[k] !== null && !isNaN(c[k]) && isAlert(c[k]));
+    }
+    // soft sanity warning: kernel parts larger than black kernel
+    const parts = r.testa + r.diced + r.tombong + r.white;
+    $('black').title = (!isNaN(parts) && !isNaN(r.black) && parts > r.black * 1.05)
+      ? 'Kernel parts add up to more than black kernel – please check' : '';
+  }
+
+  $('entryForm').addEventListener('input', updatePreview);
+  $('entryForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const r = readForm();
+    if (!validate(r)) { toast('Please fill in all weights (numbers only)', true); return; }
+
+    const parts = r.testa + r.diced + r.tombong + r.white;
+    if (parts > r.black * 1.05 &&
+        !confirm('Testa + Diced + Tombong + White kernel is more than Black kernel. Save anyway?')) return;
+
+    if (editingId !== null) {
+      const i = records.findIndex(x => x.id === editingId);
+      if (i > -1) records[i] = Object.assign({ id: editingId }, r);
+      toast('Entry updated ✔');
+    } else {
+      r.id = Date.now();
+      records.push(r);
+      toast('Entry saved ✔');
+    }
+    save();
+    resetForm(true);
+    render();
+    $('coconut').focus();
+  });
+  $('clearForm').addEventListener('click', () => resetForm(true));
+  $('cancelEdit').addEventListener('click', () => resetForm(true));
+
+  /* ---------- render ---------- */
+  function avg(arr) {
+    const v = arr.filter(x => x !== null && !isNaN(x));
+    return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+  }
+  function render() {
+    const list = filtered();
+    const all = sorted();
+    const tb = $('tbody');
+    $('empty').hidden = list.length > 0;
+    $('countLabel').textContent = `(${list.length}${list.length !== records.length ? ' of ' + records.length : ''})`;
+
+    tb.innerHTML = list.map(r => {
+      const no = all.indexOf(r) + 1;
+      const c = calc(r);
+      return `<tr>
+        <td>${no}</td>
+        <td class="left">${fmtDate(r.date)}</td>
+        <td>${r.coconut}</td><td>${r.water}</td><td>${r.shell}</td><td>${r.black}</td>
+        <td>${r.testa}</td><td>${r.diced}</td><td>${r.tombong}</td><td>${r.white}</td>
+        <td class="pct">${fmtPct(c.testa)}</td>
+        <td class="pct ${isAlert(c.diced) ? 'alert' : ''}">${fmtPct(c.diced)}</td>
+        <td class="pct">${fmtPct(c.tombong)}</td>
+        <td class="pct">${fmtPct(c.white)}</td>
+        <td class="left">${esc(r.worker)}</td>
+        <td class="note" title="${esc(r.remarks)}">${esc(r.remarks)}</td>
+        <td class="actions-cell">
+          <button class="btn btn-ghost btn-sm" data-edit="${r.id}">Edit</button>
+          <button class="btn btn-danger btn-sm" data-del="${r.id}">✕</button>
+        </td>
+      </tr>`;
+    }).join('');
+
+    // summary
+    const cs = list.map(calc);
+    const a = k => { const v = avg(cs.map(c => c[k])); return v === null ? '–' : v.toFixed(1) + '%'; };
+    const avgBlack = avg(list.map(r => r.black));
+    $('summary').innerHTML = list.length ? `
+      <div class="stat"><span>Tests</span><strong>${list.length}</strong></div>
+      <div class="stat"><span>Avg Testa %</span><strong>${a('testa')}</strong></div>
+      <div class="stat"><span>Avg Diced %</span><strong>${a('diced')}</strong></div>
+      <div class="stat"><span>Avg Tombong %</span><strong>${a('tombong')}</strong></div>
+      <div class="stat"><span>Avg White kernel %</span><strong>${a('white')}</strong></div>` : '';
+  }
+
+  $('tbody').addEventListener('click', e => {
+    const ed = e.target.closest('[data-edit]');
+    const del = e.target.closest('[data-del]');
+    if (ed) {
+      const r = records.find(x => x.id === +ed.dataset.edit);
+      if (!r) return;
+      editingId = r.id;
+      $('date').value = r.date;
+      $('worker').value = r.worker || '';
+      $('remarks').value = r.remarks || '';
+      NUM.forEach(k => $(k).value = r[k]);
+      $('formTitle').textContent = '✏️ Edit Entry';
+      $('saveBtn').textContent = '💾 Update Entry';
+      $('cancelEdit').hidden = false;
+      updatePreview();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else if (del) {
+      if (confirm('Delete this entry?')) {
+        records = records.filter(x => x.id !== +del.dataset.del);
+        save(); render(); toast('Entry deleted');
+      }
+    }
+  });
+
+  ['fromDate', 'toDate'].forEach(id => $(id).addEventListener('change', render));
+  $('resetFilter').addEventListener('click', () => { $('fromDate').value = ''; $('toDate').value = ''; render(); });
+
+  /* ---------- export ---------- */
+  const HEAD = ['No', 'Date', 'Whole coconut', 'water', 'shell & husk', 'Black Kernel', 'Testa',
+                'Diced (after cut)', 'Tombong', 'White kernel',
+                'Testa %', 'Diced % (after cut)', 'Tombong %', 'White kernel %', 'Tested by', 'Remarks'];
+
+  function rowsFor(list, forExcel) {
+    const all = sorted();
+    return list.map(r => {
+      const c = calc(r);
+      const p = v => v === null ? '' : (forExcel ? v / 100 : Math.round(v) + '%');
+      return [all.indexOf(r) + 1, forExcel ? fmtDateFull(r.date) : fmtDate(r.date),
+        r.coconut, r.water, r.shell, r.black, r.testa, r.diced, r.tombong, r.white,
+        p(c.testa), p(c.diced), p(c.tombong), p(c.white), r.worker || '', r.remarks || ''];
+    });
+  }
+  function fmtDateFull(s) { return fmtDate(s); }
+
+  function stamp() { return today(); }
+
+  $('exportXlsx').addEventListener('click', () => {
+    const list = filtered();
+    if (!list.length) { toast('Nothing to export', true); return; }
+    if (typeof XLSX === 'undefined') {
+      toast('Excel library not loaded (offline?) – exporting CSV instead', true);
+      return exportCsv();
+    }
+    const aoa = [HEAD].concat(rowsFor(list, true));
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    // percent format for columns K–N (index 10–13)
+    for (let R = 1; R < aoa.length; R++) {
+      for (let C = 10; C <= 13; C++) {
+        const cell = ws[XLSX.utils.encode_cell({ r: R, c: C })];
+        if (cell && cell.t === 'n') cell.z = '0%';
+      }
+    }
+    ws['!cols'] = HEAD.map((h, i) => ({ wch: i === 15 ? 30 : Math.max(10, h.length + 2) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Test Data');
+    XLSX.writeFile(wb, `coconut-test-data_${stamp()}.xlsx`);
+    toast('Excel file downloaded ✔');
+  });
+
+  function csvCell(v) {
+    v = String(v ?? '');
+    return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  }
+  function exportCsv() {
+    const list = filtered();
+    if (!list.length) { toast('Nothing to export', true); return; }
+    const lines = [HEAD].concat(rowsFor(list, false)).map(r => r.map(csvCell).join(','));
+    download('\ufeff' + lines.join('\r\n'), `coconut-test-data_${stamp()}.csv`, 'text/csv;charset=utf-8');
+    toast('CSV downloaded ✔');
+  }
+  $('exportCsv').addEventListener('click', exportCsv);
+
+  $('copyBtn').addEventListener('click', () => {
+    const list = filtered();
+    if (!list.length) { toast('Nothing to copy', true); return; }
+    const text = [HEAD].concat(rowsFor(list, false)).map(r => r.join('\t')).join('\n');
+    const done = () => toast('Copied – paste into Excel with Ctrl+V ✔');
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done, () => fallbackCopy(text, done));
+    } else fallbackCopy(text, done);
+  });
+  function fallbackCopy(text, cb) {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); cb(); } catch (e) { toast('Copy failed', true); }
+    ta.remove();
+  }
+
+  function download(content, name, type) {
+    const blob = new Blob([content], { type });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+  }
+
+  /* ---------- backup / restore ---------- */
+  $('backupBtn').addEventListener('click', () => {
+    if (!records.length) { toast('Nothing to back up', true); return; }
+    download(JSON.stringify(records, null, 2), `coconut-backup_${stamp()}.json`, 'application/json');
+    toast('Backup saved ✔');
+  });
+  $('restoreBtn').addEventListener('click', () => $('restoreFile').click());
+  $('restoreFile').addEventListener('change', e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => {
+      try {
+        const data = JSON.parse(rd.result);
+        if (!Array.isArray(data)) throw 0;
+        const ids = new Set(records.map(r => r.id));
+        let added = 0;
+        data.forEach(r => { if (r && r.date && !ids.has(r.id)) { records.push(r); added++; } });
+        save(); render();
+        toast(`Restored ${added} entries ✔`);
+      } catch (err) { toast('Invalid backup file', true); }
+      e.target.value = '';
+    };
+    rd.readAsText(f);
+  });
+  $('wipeBtn').addEventListener('click', () => {
+    if (confirm('Delete ALL records from this device? Export or back up first!') &&
+        confirm('Really delete everything? This cannot be undone.')) {
+      records = []; save(); render(); toast('All data deleted');
+    }
+  });
+
+  /* ---------- settings ---------- */
+  $('threshold').value = settings.threshold;
+  $('threshold').addEventListener('change', () => {
+    const v = parseFloat($('threshold').value);
+    settings.threshold = isNaN(v) ? 5 : v;
+    saveSettings(); render(); updatePreview();
+  });
+
+  /* ---------- init ---------- */
+  $('date').value = today();
+  updatePreview();
+  render();
+})();
+</script>
 </body>
 </html>
