@@ -48,38 +48,38 @@
 
       <div class="field">
         <label for="coconut">Whole coconut <span class="unit">(g)</span></label>
-        <input type="number" id="coconut" inputmode="decimal" step="any" min="0" required>
+        <input type="number" id="coconut" inputmode="decimal" enterkeyhint="next" step="any" min="0" required>
       </div>
       <div class="field">
         <label for="water">Water <span class="unit">(g)</span></label>
-        <input type="number" id="water" inputmode="decimal" step="any" min="0" required>
+        <input type="number" id="water" inputmode="decimal" enterkeyhint="next" step="any" min="0" required>
       </div>
       <div class="field">
         <label for="shell">Shell &amp; husk <span class="unit">(g)</span></label>
-        <input type="number" id="shell" inputmode="decimal" step="any" min="0" required>
+        <input type="number" id="shell" inputmode="decimal" enterkeyhint="next" step="any" min="0" required>
       </div>
       <div class="field">
         <label for="black">Black kernel <span class="unit">(g)</span></label>
-        <input type="number" id="black" inputmode="decimal" step="any" min="0" required>
+        <input type="number" id="black" inputmode="decimal" enterkeyhint="next" step="any" min="0" required>
       </div>
 
       <div class="section-label">Kernel breakdown <span style="text-transform:none">(grams)</span></div>
 
       <div class="field">
         <label for="testa">Testa <span class="unit">(g)</span></label>
-        <input type="number" id="testa" inputmode="decimal" step="any" min="0" required>
+        <input type="number" id="testa" inputmode="decimal" enterkeyhint="next" step="any" min="0" required>
       </div>
       <div class="field">
         <label for="diced">Diced (after cut) <span class="unit">(g)</span></label>
-        <input type="number" id="diced" inputmode="decimal" step="any" min="0" required>
+        <input type="number" id="diced" inputmode="decimal" enterkeyhint="next" step="any" min="0" required>
       </div>
       <div class="field">
         <label for="tombong">Tombong <span class="unit">(g)</span></label>
-        <input type="number" id="tombong" inputmode="decimal" step="any" min="0" required>
+        <input type="number" id="tombong" inputmode="decimal" enterkeyhint="next" step="any" min="0" required>
       </div>
       <div class="field">
         <label for="white">White kernel <span class="unit">(g)</span></label>
-        <input type="number" id="white" inputmode="decimal" step="any" min="0" required>
+        <input type="number" id="white" inputmode="decimal" enterkeyhint="next" step="any" min="0" required>
       </div>
 
       <div class="field full">
@@ -158,7 +158,8 @@
         <div>No records yet. Add your first test entry above.</div>
       </div>
     </div>
-    <p class="hint">Tip: “Export Excel” downloads an .xlsx to your PC. You can also open the Google Sheet and use File → Download → Microsoft Excel. Swipe the table sideways on phones.</p>
+    <div class="cards" id="cards"></div>
+    <p class="hint">Tip: “Export Excel” downloads an .xlsx to your PC. You can also open the Google Sheet and use File → Download → Microsoft Excel.</p>
   </section>
 
   <!-- ============ SETTINGS ============ -->
@@ -221,7 +222,10 @@
 
   let records = load(CACHE_KEY, []);
   let queue = load(QUEUE_KEY, []);           // pending operations not yet uploaded
-  let settings = Object.assign({ threshold: 5 }, DEFAULTS, load(SETTINGS_KEY, {}));
+  let settings = Object.assign({ threshold: 5 }, DEFAULTS);
+  // saved phone settings only override the built-in ones when they are not empty
+  const saved = load(SETTINGS_KEY, {});
+  Object.keys(saved).forEach(k => { if (saved[k] !== '' && saved[k] != null) settings[k] = saved[k]; });
   let editingId = null;
   let syncing = false;
 
@@ -452,6 +456,34 @@
       </tr>`;
     }).join('');
 
+    $('cards').innerHTML = list.length ? list.map(r => {
+      const no = all.indexOf(r) + 1;
+      const c = calc(r);
+      return `<div class="rec">
+        <div class="rec-top">
+          <div><strong>#${no}</strong> · ${fmtDate(r.date)}</div>
+          <div class="rec-who">${pending.has(r.id) ? '⏳ ' : ''}${esc(r.worker)}</div>
+        </div>
+        <div class="rec-pcts">
+          <div class="chip"><span>Testa</span><b>${fmtPct(c.testa)}</b></div>
+          <div class="chip ${isAlert(c.diced) ? 'alert' : ''}"><span>Diced</span><b>${fmtPct(c.diced)}</b></div>
+          <div class="chip"><span>Tombong</span><b>${fmtPct(c.tombong)}</b></div>
+          <div class="chip"><span>White</span><b>${fmtPct(c.white)}</b></div>
+        </div>
+        <div class="rec-w">
+          <div><span>Coconut</span>${r.coconut}</div><div><span>Water</span>${r.water}</div>
+          <div><span>Shell</span>${r.shell}</div><div><span>Black</span>${r.black}</div>
+          <div><span>Testa</span>${r.testa}</div><div><span>Diced</span>${r.diced}</div>
+          <div><span>Tombong</span>${r.tombong}</div><div><span>White</span>${r.white}</div>
+        </div>
+        ${r.remarks ? `<div class="rec-note">${esc(r.remarks)}</div>` : ''}
+        <div class="rec-btns">
+          <button class="btn btn-ghost btn-sm" data-edit="${esc(r.id)}">✏️ Edit</button>
+          <button class="btn btn-danger btn-sm" data-del="${esc(r.id)}">🗑 Delete</button>
+        </div>
+      </div>`;
+    }).join('') : '';
+
     const cs = list.map(calc);
     const a = k => { const v = avg(cs.map(c => c[k])); return v === null ? '–' : v.toFixed(1) + '%'; };
     $('summary').innerHTML = list.length ? `
@@ -466,7 +498,7 @@
     if (settings.sheetUrl) sh.href = settings.sheetUrl;
   }
 
-  $('tbody').addEventListener('click', e => {
+  function rowClick(e) {
     const ed = e.target.closest('[data-edit]');
     const del = e.target.closest('[data-del]');
     if (ed) {
@@ -492,7 +524,9 @@
         toast('Entry deleted');
       }
     }
-  });
+  }
+  $('tbody').addEventListener('click', rowClick);
+  $('cards').addEventListener('click', rowClick);
 
   ['fromDate', 'toDate'].forEach(id => $(id).addEventListener('change', render));
   $('resetFilter').addEventListener('click', () => { $('fromDate').value = ''; $('toDate').value = ''; render(); });
