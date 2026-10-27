@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f6f4a">
+<title>Coconut Test Logger</title>
+<link rel="stylesheet" href="style.css">
+<!-- Excel export library (needs internet) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="logo">🥥</div>
+    <div>
+      <h1>Coconut Test Logger</h1>
+      <p>Daily machine testing data entry</p>
+    </div>
+    <button type="button" class="sync-pill local" id="syncPill"><span class="dot"></span><span id="syncText">Not set up</span></button>
+  </div>
+</header>
+
+<main class="container">
+
+  <div class="banner" id="setupBanner" hidden>
+    <strong>One-time setup needed.</strong> Open <em>Settings &amp; Online Storage</em> at the bottom and enter the Google Sheet link and PIN. Until then, entries are only kept on this phone.
+  </div>
+  <div class="banner err" id="errBanner" hidden></div>
+
+  <!-- ============ ENTRY FORM ============ -->
+  <section class="card">
+    <h2 id="formTitle">➕ New Test Entry</h2>
+    <form id="entryForm" class="grid" autocomplete="off" novalidate>
+
+      <div class="field">
+        <label for="date">Date</label>
+        <input type="date" id="date" required>
+      </div>
+      <div class="field wide">
+        <label for="worker">Tested by <span class="opt">(optional)</span></label>
+        <input type="text" id="worker" placeholder="Worker name" autocomplete="name">
+      </div>
+      <div class="field"></div>
+
+      <div class="section-label">Whole coconut breakdown <span style="text-transform:none">(grams)</span></div>
+
+      <div class="field">
+        <label for="coconut">Whole coconut <span class="unit">(g)</span></label>
+        <input type="number" id="coconut" inputmode="decimal" step="any" min="0" required>
+      </div>
+      <div class="field">
+        <label for="water">Water <span class="unit">(g)</span></label>
+        <input type="number" id="water" inputmode="decimal" step="any" min="0" required>
+      </div>
+      <div class="field">
+        <label for="shell">Shell &amp; husk <span class="unit">(g)</span></label>
+        <input type="number" id="shell" inputmode="decimal" step="any" min="0" required>
+      </div>
+      <div class="field">
+        <label for="black">Black kernel <span class="unit">(g)</span></label>
+        <input type="number" id="black" inputmode="decimal" step="any" min="0" required>
+      </div>
+
+      <div class="section-label">Kernel breakdown <span style="text-transform:none">(grams)</span></div>
+
+      <div class="field">
+        <label for="testa">Testa <span class="unit">(g)</span></label>
+        <input type="number" id="testa" inputmode="decimal" step="any" min="0" required>
+      </div>
+      <div class="field">
+        <label for="diced">Diced (after cut) <span class="unit">(g)</span></label>
+        <input type="number" id="diced" inputmode="decimal" step="any" min="0" required>
+      </div>
+      <div class="field">
+        <label for="tombong">Tombong <span class="unit">(g)</span></label>
+        <input type="number" id="tombong" inputmode="decimal" step="any" min="0" required>
+      </div>
+      <div class="field">
+        <label for="white">White kernel <span class="unit">(g)</span></label>
+        <input type="number" id="white" inputmode="decimal" step="any" min="0" required>
+      </div>
+
+      <div class="field full">
+        <label for="remarks">Remarks <span class="opt">(optional)</span></label>
+        <textarea id="remarks" placeholder="Machine, batch, anything unusual…"></textarea>
+      </div>
+
+      <!-- Live percentages -->
+      <div class="preview" id="preview">
+        <div class="pv" id="pvTesta"><span>Testa %</span><strong>–</strong></div>
+        <div class="pv" id="pvDiced"><span>Diced %</span><strong>–</strong></div>
+        <div class="pv" id="pvTombong"><span>Tombong %</span><strong>–</strong></div>
+        <div class="pv" id="pvWhite"><span>White kernel %</span><strong>–</strong></div>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="btn btn-primary big" id="saveBtn">💾 Save Entry</button>
+        <button type="button" class="btn btn-ghost" id="cancelEdit" hidden>Cancel edit</button>
+        <button type="button" class="btn btn-ghost" id="clearForm">Clear</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- ============ RECORDS ============ -->
+  <section class="card">
+    <h2>📋 Records <small id="countLabel"></small></h2>
+
+    <div class="toolbar">
+      <div class="field">
+        <label for="fromDate">From</label>
+        <input type="date" id="fromDate">
+      </div>
+      <div class="field">
+        <label for="toDate">To</label>
+        <input type="date" id="toDate">
+      </div>
+      <button class="btn btn-ghost" id="resetFilter" type="button">Reset</button>
+      <div class="spacer"></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="exportXlsx" type="button">⬇ Export Excel</button>
+        <button class="btn btn-ghost" id="copyBtn" type="button">📄 Copy for Excel</button>
+        <button class="btn btn-ghost" id="exportCsv" type="button">CSV</button>
+        <a class="btn btn-ghost" id="openSheet" href="#" target="_blank" rel="noopener" hidden>📊 Open Google Sheet</a>
+      </div>
+    </div>
+
+    <div class="summary" id="summary"></div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>No</th>
+            <th class="left">Date</th>
+            <th>Whole coconut</th>
+            <th>Water</th>
+            <th>Shell &amp; husk</th>
+            <th>Black kernel</th>
+            <th>Testa</th>
+            <th>Diced (after cut)</th>
+            <th>Tombong</th>
+            <th>White kernel</th>
+            <th class="pct">Testa %</th>
+            <th class="pct">Diced %</th>
+            <th class="pct">Tombong %</th>
+            <th class="pct">White kernel %</th>
+            <th class="left">Tested by</th>
+            <th class="left">Remarks</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div class="empty" id="empty" hidden>
+        <div class="big">🥥</div>
+        <div>No records yet. Add your first test entry above.</div>
+      </div>
+    </div>
+    <p class="hint">Tip: “Export Excel” downloads an .xlsx to your PC. You can also open the Google Sheet and use File → Download → Microsoft Excel. Swipe the table sideways on phones.</p>
+  </section>
+
+  <!-- ============ SETTINGS ============ -->
+  <section class="card">
+    <details id="settingsBox">
+      <summary>⚙️ Settings &amp; Online Storage</summary>
+      <div class="settings-stack">
+        <div class="field">
+          <label for="scriptUrl">Web app URL <span class="opt">(from Google Apps Script deployment)</span></label>
+          <input type="url" id="scriptUrl" placeholder="https://script.google.com/macros/s/.../exec" autocapitalize="off" autocorrect="off" spellcheck="false">
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label for="pin">PIN</label>
+            <input type="password" id="pin" autocomplete="off" placeholder="Same PIN as in Code.gs">
+          </div>
+          <div class="field">
+            <label for="sheetUrl">Google Sheet link <span class="opt">(optional – for the “Open Sheet” button)</span></label>
+            <input type="url" id="sheetUrl" placeholder="https://docs.google.com/spreadsheets/d/..." autocapitalize="off" spellcheck="false">
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label for="threshold">Highlight Diced % red when ≥</label>
+            <input type="number" id="threshold" inputmode="decimal" min="0" step="0.5" value="5">
+          </div>
+          <div class="btn-row" style="align-self:end">
+            <button class="btn btn-primary" id="saveSettings" type="button">Save settings &amp; connect</button>
+            <button class="btn btn-ghost" id="backupBtn" type="button">Backup file</button>
+          </div>
+        </div>
+      </div>
+      <p class="hint">Entries are saved to your Google Sheet. If the phone has no signal, the entry is kept on the phone and uploaded automatically once it is back online (shown as “pending” at the top).</p>
+    </details>
+  </section>
+
+</main>
+
+<footer>Coconut Test Logger · Percentages are calculated against Black kernel weight</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ===== OPTIONAL: pre-fill these so workers never have to type them =====
+     Put your Web app URL and PIN here, then host the site. */
+  const DEFAULTS = {
+    scriptUrl: '',   // e.g. 'https://script.google.com/macros/s/AKfy.../exec'
+    pin: '3008',       // same PIN as in Code.gs
+    sheetUrl: ''     // optional: link to your Google Sheet
+  };
+
+  const CACHE_KEY = 'coconutCache_v2';
+  const QUEUE_KEY = 'coconutQueue_v2';
+  const SETTINGS_KEY = 'coconutSettings_v2';
+  const NUM = ['coconut', 'water', 'shell', 'black', 'testa', 'diced', 'tombong', 'white'];
+  const $ = id => document.getElementById(id);
+
+  let records = load(CACHE_KEY, []);
+  let queue = load(QUEUE_KEY, []);           // pending operations not yet uploaded
+  let settings = Object.assign({ threshold: 5 }, DEFAULTS, load(SETTINGS_KEY, {}));
+  let editingId = null;
+  let syncing = false;
+
+  /* ---------- storage ---------- */
+  function load(k, fallback) {
+    try { const v = JSON.parse(localStorage.getItem(k)); return v ?? fallback; }
+    catch (e) { return fallback; }
+  }
+  function store(k, v) {
+    try { localStorage.setItem(k, JSON.stringify(v)); }
+    catch (e) { toast('Phone storage is full or blocked', true); }
+  }
+  const saveCache = () => store(CACHE_KEY, records);
+  const saveQueue = () => store(QUEUE_KEY, queue);
+  const saveSettingsLocal = () => store(SETTINGS_KEY, settings);
+  const configured = () => !!(settings.scriptUrl && settings.pin);
+
+  /* ---------- helpers ---------- */
+  function today() {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 10);
+  }
+  function newId() { return String(Date.now()) + Math.floor(Math.random() * 100).toString().padStart(2, '0'); }
+  function pct(x, base) { return base > 0 ? (x / base) * 100 : null; }
+  function calc(r) {
+    return { testa: pct(r.testa, r.black), diced: pct(r.diced, r.black),
+             tombong: pct(r.tombong, r.black), white: pct(r.white, r.black) };
+  }
+  function fmtPct(v) { return v === null || isNaN(v) ? '–' : Math.round(v) + '%'; }
+  function isAlert(v) { return v !== null && !isNaN(v) && Math.round(v) >= settings.threshold; }
+  function fmtDate(s) {
+    if (!s) return '';
+    const [y, m, d] = s.split('-');
+    const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m - 1];
+    return `${+d}-${mon}`;
+  }
+  function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  let toastTimer;
+  function toast(msg, isErr) {
+    const t = $('toast');
+    t.textContent = msg;
+    t.className = 'toast show' + (isErr ? ' err' : '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.className = 'toast', 3000);
+  }
+  function sorted() {
+    return records.slice().sort((a, b) =>
+      a.date === b.date ? (a.id < b.id ? -1 : a.id > b.id ? 1 : 0) : (a.date < b.date ? -1 : 1));
+  }
+  function filtered() {
+    const f = $('fromDate').value, t = $('toDate').value;
+    return sorted().filter(r => (!f || r.date >= f) && (!t || r.date <= t));
+  }
+
+  /* ---------- server (Google Apps Script) ---------- */
+  async function api(payload, method) {
+    const url = settings.scriptUrl.trim();
+    let res;
+    if (method === 'GET') {
+      const q = new URLSearchParams(Object.assign({ pin: settings.pin }, payload)).toString();
+      res = await fetch(url + (url.includes('?') ? '&' : '?') + q, { method: 'GET' });
+    } else {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },   // avoids CORS preflight
+        body: JSON.stringify(Object.assign({ pin: settings.pin }, payload))
+      });
+    }
+    if (!res.ok) throw new Error('Server error ' + res.status);
+    let data;
+    try { data = await res.json(); } catch (e) { throw new Error('Bad response – check the Web app URL and that access is set to “Anyone”'); }
+    if (!data.ok) throw new Error(data.error || 'Server refused the request');
+    return data;
+  }
+
+  function setStatus(kind, text) {
+    const pill = $('syncPill');
+    pill.className = 'sync-pill ' + kind;
+    $('syncText').textContent = text;
+  }
+  function showErr(msg) {
+    const b = $('errBanner');
+    b.hidden = !msg;
+    b.textContent = msg || '';
+  }
+  function updateStatus() {
+    $('setupBanner').hidden = configured();
+    if (!configured()) { setStatus('local', 'Not set up'); return; }
+    if (syncing) { setStatus('syncing', 'Syncing…'); return; }
+    if (queue.length) { setStatus('err', queue.length + ' pending – tap to retry'); return; }
+    setStatus('', 'Synced ✔');
+  }
+
+  // Upload pending operations, then pull latest list from the sheet
+  async function sync(manual) {
+    if (!configured()) { updateStatus(); if (manual) toast('Enter the Web app URL and PIN in Settings first', true); return; }
+    if (syncing) return;
+    syncing = true; updateStatus(); showErr('');
+    try {
+      while (queue.length) {
+        const op = queue[0];
+        if (op.type === 'save') await api({ action: 'save', record: op.record }, 'POST');
+        else await api({ action: 'delete', id: op.id }, 'POST');
+        queue.shift(); saveQueue();
+      }
+      const data = await api({ action: 'list' }, 'GET');
+      records = data.records || [];
+      saveCache();
+      if (manual) toast('Synced with Google Sheet ✔');
+    } catch (err) {
+      const offline = !navigator.onLine || /Failed to fetch|NetworkError|Load failed/i.test(String(err));
+      showErr(offline
+        ? 'No connection. Your entries are kept on this phone and will upload when you are back online.'
+        : 'Sync problem: ' + err.message);
+    } finally {
+      syncing = false; updateStatus(); render();
+    }
+  }
+  $('syncPill').addEventListener('click', () => sync(true));
+  window.addEventListener('online', () => sync());
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(); });
+
+  /* ---------- form ---------- */
+  function readForm() {
+    const r = { date: $('date').value, worker: $('worker').value.trim(), remarks: $('remarks').value.trim() };
+    NUM.forEach(k => r[k] = $(k).value === '' ? NaN : parseFloat($(k).value));
+    return r;
+  }
+  function validate(r) {
+    let ok = true;
+    $('date').classList.toggle('invalid', !r.date);
+    if (!r.date) ok = false;
+    NUM.forEach(k => {
+      const bad = isNaN(r[k]) || r[k] < 0;
+      $(k).classList.toggle('invalid', bad);
+      if (bad) ok = false;
+    });
+    return ok;
+  }
+  function resetForm(keepDate) {
+    const d = keepDate ? $('date').value : today();
+    const w = $('worker').value;                 // remember worker name between entries
+    $('entryForm').reset();
+    $('date').value = d || today();
+    $('worker').value = w;
+    document.querySelectorAll('.invalid').forEach(e => e.classList.remove('invalid'));
+    editingId = null;
+    $('formTitle').textContent = '➕ New Test Entry';
+    $('saveBtn').textContent = '💾 Save Entry';
+    $('cancelEdit').hidden = true;
+    updatePreview();
+  }
+  function updatePreview() {
+    const r = readForm();
+    const c = calc(r);
+    const map = { testa: 'pvTesta', diced: 'pvDiced', tombong: 'pvTombong', white: 'pvWhite' };
+    for (const k in map) {
+      const el = $(map[k]);
+      el.querySelector('strong').textContent = fmtPct(c[k]);
+      el.classList.toggle('alert', k === 'diced' && isAlert(c[k]));
+    }
+  }
+
+  $('entryForm').addEventListener('input', updatePreview);
+  $('entryForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const r = readForm();
+    if (!validate(r)) { toast('Please fill in all weights (numbers only)', true); return; }
+
+    const parts = r.testa + r.diced + r.tombong + r.white;
+    if (parts > r.black * 1.05 &&
+        !confirm('Testa + Diced + Tombong + White kernel is more than Black kernel. Save anyway?')) return;
+
+    if (editingId !== null) {
+      r.id = editingId;
+      const i = records.findIndex(x => x.id === editingId);
+      if (i > -1) records[i] = r; else records.push(r);
+    } else {
+      r.id = newId();
+      records.push(r);
+    }
+    saveCache();
+    queue.push({ type: 'save', record: r }); saveQueue();
+    toast(configured() ? 'Saved – uploading… ✔' : 'Saved on this phone only (setup needed)');
+    resetForm(true);
+    render();
+    updateStatus();
+    sync();
+    $('coconut').focus();
+  });
+  $('clearForm').addEventListener('click', () => resetForm(true));
+  $('cancelEdit').addEventListener('click', () => resetForm(true));
+
+  /* ---------- render ---------- */
+  function avg(arr) {
+    const v = arr.filter(x => x !== null && !isNaN(x));
+    return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+  }
+  function render() {
+    const list = filtered();
+    const all = sorted();
+    const pending = new Set(queue.filter(q => q.type === 'save').map(q => q.record.id));
+    $('empty').hidden = list.length > 0;
+    $('countLabel').textContent = `(${list.length}${list.length !== records.length ? ' of ' + records.length : ''})`;
+
+    $('tbody').innerHTML = list.map(r => {
+      const no = all.indexOf(r) + 1;
+      const c = calc(r);
+      return `<tr>
+        <td>${no}</td>
+        <td class="left">${fmtDate(r.date)}</td>
+        <td>${r.coconut}</td><td>${r.water}</td><td>${r.shell}</td><td>${r.black}</td>
+        <td>${r.testa}</td><td>${r.diced}</td><td>${r.tombong}</td><td>${r.white}</td>
+        <td class="pct">${fmtPct(c.testa)}</td>
+        <td class="pct ${isAlert(c.diced) ? 'alert' : ''}">${fmtPct(c.diced)}</td>
+        <td class="pct">${fmtPct(c.tombong)}</td>
+        <td class="pct">${fmtPct(c.white)}</td>
+        <td class="left">${esc(r.worker)}</td>
+        <td class="note" title="${esc(r.remarks)}">${esc(r.remarks)}</td>
+        <td class="actions-cell">
+          ${pending.has(r.id) ? '<span title="Waiting to upload">⏳</span> ' : ''}
+          <button class="btn btn-ghost btn-sm" data-edit="${esc(r.id)}">Edit</button>
+          <button class="btn btn-danger btn-sm" data-del="${esc(r.id)}">✕</button>
+        </td>
+      </tr>`;
+    }).join('');
+
+    const cs = list.map(calc);
+    const a = k => { const v = avg(cs.map(c => c[k])); return v === null ? '–' : v.toFixed(1) + '%'; };
+    $('summary').innerHTML = list.length ? `
+      <div class="stat"><span>Tests</span><strong>${list.length}</strong></div>
+      <div class="stat"><span>Avg Testa %</span><strong>${a('testa')}</strong></div>
+      <div class="stat"><span>Avg Diced %</span><strong>${a('diced')}</strong></div>
+      <div class="stat"><span>Avg Tombong %</span><strong>${a('tombong')}</strong></div>
+      <div class="stat"><span>Avg White kernel %</span><strong>${a('white')}</strong></div>` : '';
+
+    const sh = $('openSheet');
+    sh.hidden = !settings.sheetUrl;
+    if (settings.sheetUrl) sh.href = settings.sheetUrl;
+  }
+
+  $('tbody').addEventListener('click', e => {
+    const ed = e.target.closest('[data-edit]');
+    const del = e.target.closest('[data-del]');
+    if (ed) {
+      const r = records.find(x => x.id === ed.dataset.edit);
+      if (!r) return;
+      editingId = r.id;
+      $('date').value = r.date;
+      $('worker').value = r.worker || '';
+      $('remarks').value = r.remarks || '';
+      NUM.forEach(k => $(k).value = r[k]);
+      $('formTitle').textContent = '✏️ Edit Entry';
+      $('saveBtn').textContent = '💾 Update Entry';
+      $('cancelEdit').hidden = false;
+      updatePreview();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else if (del) {
+      if (confirm('Delete this entry? It will also be removed from the Google Sheet.')) {
+        const id = del.dataset.del;
+        records = records.filter(x => x.id !== id);
+        queue = queue.filter(q => !(q.type === 'save' && q.record.id === id));   // drop un-uploaded edits
+        queue.push({ type: 'delete', id }); saveQueue(); saveCache();
+        render(); updateStatus(); sync();
+        toast('Entry deleted');
+      }
+    }
+  });
+
+  ['fromDate', 'toDate'].forEach(id => $(id).addEventListener('change', render));
+  $('resetFilter').addEventListener('click', () => { $('fromDate').value = ''; $('toDate').value = ''; render(); });
+
+  /* ---------- export ---------- */
+  const HEAD = ['No', 'Date', 'Whole coconut', 'water', 'shell & husk', 'Black Kernel', 'Testa',
+                'Diced (after cut)', 'Tombong', 'White kernel',
+                'Testa %', 'Diced % (after cut)', 'Tombong %', 'White kernel %', 'Tested by', 'Remarks'];
+
+  function rowsFor(list, forExcel) {
+    const all = sorted();
+    return list.map(r => {
+      const c = calc(r);
+      const p = v => v === null ? '' : (forExcel ? v / 100 : Math.round(v) + '%');
+      return [all.indexOf(r) + 1, fmtDate(r.date),
+        r.coconut, r.water, r.shell, r.black, r.testa, r.diced, r.tombong, r.white,
+        p(c.testa), p(c.diced), p(c.tombong), p(c.white), r.worker || '', r.remarks || ''];
+    });
+  }
+  const stamp = today;
+
+  $('exportXlsx').addEventListener('click', () => {
+    const list = filtered();
+    if (!list.length) { toast('Nothing to export', true); return; }
+    if (typeof XLSX === 'undefined') {
+      toast('Excel library not loaded – exporting CSV instead', true);
+      return exportCsv();
+    }
+    const aoa = [HEAD].concat(rowsFor(list, true));
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    for (let R = 1; R < aoa.length; R++) {
+      for (let C = 10; C <= 13; C++) {
+        const cell = ws[XLSX.utils.encode_cell({ r: R, c: C })];
+        if (cell && cell.t === 'n') cell.z = '0%';
+      }
+    }
+    ws['!cols'] = HEAD.map((h, i) => ({ wch: i === 15 ? 30 : Math.max(10, h.length + 2) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Test Data');
+    XLSX.writeFile(wb, `coconut-test-data_${stamp()}.xlsx`);
+    toast('Excel file downloaded ✔');
+  });
+
+  function csvCell(v) {
+    v = String(v ?? '');
+    return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  }
+  function exportCsv() {
+    const list = filtered();
+    if (!list.length) { toast('Nothing to export', true); return; }
+    const lines = [HEAD].concat(rowsFor(list, false)).map(r => r.map(csvCell).join(','));
+    download('﻿' + lines.join('\r\n'), `coconut-test-data_${stamp()}.csv`, 'text/csv;charset=utf-8');
+    toast('CSV downloaded ✔');
+  }
+  $('exportCsv').addEventListener('click', exportCsv);
+
+  $('copyBtn').addEventListener('click', () => {
+    const list = filtered();
+    if (!list.length) { toast('Nothing to copy', true); return; }
+    const text = [HEAD].concat(rowsFor(list, false)).map(r => r.join('\t')).join('\n');
+    const done = () => toast('Copied – paste into Excel with Ctrl+V ✔');
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done, () => fallbackCopy(text, done));
+    } else fallbackCopy(text, done);
+  });
+  function fallbackCopy(text, cb) {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); cb(); } catch (e) { toast('Copy failed', true); }
+    ta.remove();
+  }
+  function download(content, name, type) {
+    const blob = new Blob([content], { type });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+  }
+
+  /* ---------- settings ---------- */
+  $('scriptUrl').value = settings.scriptUrl || '';
+  $('pin').value = settings.pin || '';
+  $('sheetUrl').value = settings.sheetUrl || '';
+  $('threshold').value = settings.threshold;
+
+  $('saveSettings').addEventListener('click', () => {
+    const url = $('scriptUrl').value.trim();
+    if (url && !/^https:\/\/script\.google\.com\/.+\/exec/.test(url)) {
+      toast('Web app URL should look like https://script.google.com/macros/s/…/exec', true);
+      return;
+    }
+    const v = parseFloat($('threshold').value);
+    settings.scriptUrl = url;
+    settings.pin = $('pin').value;
+    settings.sheetUrl = $('sheetUrl').value.trim();
+    settings.threshold = isNaN(v) ? 5 : v;
+    saveSettingsLocal();
+    render(); updatePreview(); updateStatus();
+    sync(true);
+  });
+
+  // Local backup of what is currently on this phone (safety net)
+  $('backupBtn').addEventListener('click', () => {
+    if (!records.length) { toast('Nothing to back up', true); return; }
+    download(JSON.stringify(records, null, 2), `coconut-backup_${stamp()}.json`, 'application/json');
+    toast('Backup saved ✔');
+  });
+
+  /* ---------- init ---------- */
+  $('date').value = today();
+  updatePreview();
+  render();
+  updateStatus();
+  if (!configured()) $('settingsBox').open = true;
+  sync();
+})();
+</script>
+</body>
+</html>
