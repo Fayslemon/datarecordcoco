@@ -198,7 +198,7 @@
 
 </main>
 
-<footer>Coconut Test Logger · Percentages are calculated against Black kernel weight</footer>
+<footer>Coconut Test Logger · Percentages are calculated against Whole coconut weight</footer>
 
 <div class="toast" id="toast"></div>
 
@@ -252,8 +252,9 @@
   function newId() { return String(Date.now()) + Math.floor(Math.random() * 100).toString().padStart(2, '0'); }
   function pct(x, base) { return base > 0 ? (x / base) * 100 : null; }
   function calc(r) {
-    return { testa: pct(r.testa, r.black), diced: pct(r.diced, r.black),
-             tombong: pct(r.tombong, r.black), white: pct(r.white, r.black) };
+    // every percentage is a share of the WHOLE COCONUT weight
+    return { testa: pct(r.testa, r.coconut), diced: pct(r.diced, r.coconut),
+             tombong: pct(r.tombong, r.coconut), white: pct(r.white, r.coconut) };
   }
   function fmtPct(v) { return v === null || isNaN(v) ? '–' : Math.round(v) + '%'; }
   function isAlert(v) { return v !== null && !isNaN(v) && Math.round(v) >= settings.threshold; }
